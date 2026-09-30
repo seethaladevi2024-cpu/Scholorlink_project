@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth, fallbackUser } from "../context/AuthContext";
 import { api } from "../services/api";
+import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { 
   User, 
   Mail, 
@@ -17,23 +18,25 @@ import {
   ExternalLink
 } from "lucide-react";
 
-export default function Profile() {
+function ProfileContent() {
   const { user, setUser } = useAuth();
   
+  const initialData = user?.profile || fallbackUser.profile;
+
   const [profileData, setProfileData] = useState({
-    name: "",
-    gender: "Male",
-    dob: "",
-    phone: "",
-    email: "",
-    can_number: "",
-    caste: "OBC",
-    community: "",
-    annual_income: 180000,
-    current_course: "B.Tech Computer Science & Engineering",
-    institution_name: "National Institute of Technology",
-    marks_percentage: 84.5,
-    state: "National"
+    name: initialData.name || "Rahul Verma",
+    gender: initialData.gender || "Male",
+    dob: initialData.dob || "2003-08-14",
+    phone: initialData.phone || "9876543210",
+    email: initialData.email || "rahul.verma@example.edu",
+    can_number: initialData.can_number || "CAN-2025-98241",
+    caste: initialData.caste || "OBC",
+    community: initialData.community || "Backward Class (BC-C)",
+    annual_income: initialData.annual_income || 180000,
+    current_course: initialData.current_course || "B.Tech Computer Science & Engineering",
+    institution_name: initialData.institution_name || "National Institute of Technology",
+    marks_percentage: initialData.marks_percentage || 84.5,
+    state: initialData.state || "National"
   });
 
   const [sheetStatus, setSheetStatus] = useState(null);
@@ -43,6 +46,7 @@ export default function Profile() {
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
+    let isMounted = true;
     async function loadProfile() {
       try {
         setLoading(true);
@@ -51,22 +55,25 @@ export default function Profile() {
           api.getSheetStatus().catch(() => null)
         ]);
 
-        if (prof) {
-          setProfileData(prof);
-        } else if (user?.profile) {
-          setProfileData(user.profile);
-        }
+        if (isMounted) {
+          if (prof && typeof prof === "object" && Object.keys(prof).length > 0) {
+            setProfileData(prev => ({ ...prev, ...prof }));
+          } else if (user?.profile) {
+            setProfileData(prev => ({ ...prev, ...user.profile }));
+          }
 
-        if (sheet) {
-          setSheetStatus(sheet);
+          if (sheet) {
+            setSheetStatus(sheet);
+          }
         }
       } catch (err) {
         console.error("Profile load error:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     loadProfile();
+    return () => { isMounted = false; };
   }, [user]);
 
   const handleChange = (e) => {
@@ -83,14 +90,15 @@ export default function Profile() {
     try {
       const res = await api.updateProfile(profileData);
       setSuccessMsg("Student profile attributes successfully updated and validated.");
-      if (res.profile) {
-        setProfileData(res.profile);
-        // Update user in context
-        setUser(prev => ({
-          ...prev,
-          full_name: res.profile.name,
-          profile: res.profile
-        }));
+      if (res && res.profile) {
+        setProfileData(prev => ({ ...prev, ...res.profile }));
+        if (setUser) {
+          setUser(prev => ({
+            ...(prev || fallbackUser),
+            full_name: res.profile.name || prev?.full_name,
+            profile: { ...(prev?.profile || {}), ...res.profile }
+          }));
+        }
       }
     } catch (err) {
       setErrorMsg(err.message || "Failed to update profile.");
@@ -371,5 +379,13 @@ export default function Profile() {
 
       </div>
     </div>
+  );
+}
+
+export default function Profile() {
+  return (
+    <ErrorBoundary title="Student Profile Management">
+      <ProfileContent />
+    </ErrorBoundary>
   );
 }

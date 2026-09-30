@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../services/api";
+import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { 
   ShieldCheck, 
   Users, 
@@ -20,7 +21,7 @@ import {
   HelpCircle
 } from "lucide-react";
 
-export default function AdminDashboard() {
+function AdminDashboardContent() {
   const { role, switchRole } = useAuth();
   
   const [activeTab, setActiveTab] = useState("queue"); // "queue" or "knowledge_base"
@@ -59,8 +60,8 @@ export default function AdminDashboard() {
       ]);
 
       setOverview(ovData);
-      setQueue(qData || []);
-      setScholarships(schData || []);
+      setQueue(Array.isArray(qData) ? qData : []);
+      setScholarships(Array.isArray(schData) ? schData : []);
     } catch (err) {
       console.error("Error loading admin records:", err);
     } finally {
@@ -139,6 +140,9 @@ export default function AdminDashboard() {
     registered_students: 1
   };
 
+  const safeQueue = Array.isArray(queue) ? queue : [];
+  const safeScholarships = Array.isArray(scholarships) ? scholarships : [];
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
@@ -166,7 +170,7 @@ export default function AdminDashboard() {
                 activeTab === "queue" ? "bg-blue-700 text-white border-blue-700 shadow-sm" : "bg-white text-slate-700 border-slate-300"
               }`}
             >
-              Verification Queue ({kpis.docs_requiring_review})
+              Verification Queue ({kpis.docs_requiring_review || safeQueue.length})
             </button>
             <button
               onClick={() => setActiveTab("knowledge_base")}
@@ -174,7 +178,7 @@ export default function AdminDashboard() {
                 activeTab === "knowledge_base" ? "bg-blue-700 text-white border-blue-700 shadow-sm" : "bg-white text-slate-700 border-slate-300"
               }`}
             >
-              Centralized Rules KB ({scholarships.length})
+              Centralized Rules KB ({safeScholarships.length})
             </button>
           </div>
         </div>
@@ -241,7 +245,7 @@ export default function AdminDashboard() {
                 <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                 <span>Loading verification items...</span>
               </div>
-            ) : queue.length === 0 ? (
+            ) : safeQueue.length === 0 ? (
               <div className="text-center py-12 text-slate-400 text-xs space-y-2">
                 <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
                 <p>All verification queue items have been audited and resolved.</p>
@@ -260,7 +264,7 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {queue.map((item) => (
+                    {safeQueue.map((item) => (
                       <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
                         
                         <td className="px-5 py-4">
@@ -278,11 +282,11 @@ export default function AdminDashboard() {
 
                         <td className="px-4 py-4 font-semibold">
                           <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
-                            item.confidence >= 85 
+                            (item.confidence || 0) >= 85 
                               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                               : "bg-amber-50 text-amber-800 border-amber-200"
                           }`}>
-                            {item.confidence}%
+                            {item.confidence || 0}%
                           </span>
                         </td>
 
@@ -353,14 +357,14 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {scholarships.map((sch) => (
+              {safeScholarships.map((sch) => (
                 <div key={sch.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800">
                       {sch.category}
                     </span>
                     <span className="text-xs font-mono font-semibold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
-                      Version: {sch.version}
+                      Version: {sch.version || "v1.0"}
                     </span>
                   </div>
 
@@ -372,8 +376,8 @@ export default function AdminDashboard() {
                     <div>Provider: <strong className="text-slate-800">{sch.provider}</strong></div>
                     <div>Max Income Ceiling: <strong>₹{sch.rules?.max_income?.toLocaleString() || "2,50,000"}</strong></div>
                     <div>Min Qualifying Score: <strong>{sch.rules?.min_marks || 50}%</strong></div>
-                    <div>Communities: <strong>{sch.rules?.allowed_castes?.join(", ") || "All"}</strong></div>
-                    <div>Last Updated: <span className="text-slate-400">{sch.last_updated}</span></div>
+                    <div>Communities: <strong>{Array.isArray(sch.rules?.allowed_castes) ? sch.rules.allowed_castes.join(", ") : "All"}</strong></div>
+                    <div>Last Updated: <span className="text-slate-400">{sch.last_updated || "Recent"}</span></div>
                   </div>
 
                   <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-xs">
@@ -386,7 +390,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* REVIEW DRAWER / MODAL */}
+        {/* REVIEW MODAL */}
         {selectedQueueItem && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
@@ -547,5 +551,13 @@ export default function AdminDashboard() {
 
       </div>
     </div>
+  );
+}
+
+export default function AdminDashboard() {
+  return (
+    <ErrorBoundary title="Admin & Verification Portal">
+      <AdminDashboardContent />
+    </ErrorBoundary>
   );
 }

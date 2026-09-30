@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
+import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { 
   Search, 
   Filter, 
@@ -13,7 +14,7 @@ import {
   ExternalLink
 } from "lucide-react";
 
-export default function Scholarships() {
+function ScholarshipsContent() {
   const [scholarships, setScholarships] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -31,6 +32,7 @@ export default function Scholarships() {
   ];
 
   useEffect(() => {
+    let isMounted = true;
     async function loadScholarships() {
       try {
         setLoading(true);
@@ -39,15 +41,20 @@ export default function Scholarships() {
           search: searchTerm,
           min_match: minMatch
         });
-        setScholarships(data || []);
+        if (isMounted) {
+          setScholarships(Array.isArray(data) ? data : []);
+        }
       } catch (err) {
         console.error("Failed to load scholarships:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     loadScholarships();
+    return () => { isMounted = false; };
   }, [categoryFilter, searchTerm, minMatch]);
+
+  const safeScholarships = Array.isArray(scholarships) ? scholarships : [];
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -115,7 +122,7 @@ export default function Scholarships() {
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
             <span>Evaluating scholarship rules against candidate profile...</span>
           </div>
-        ) : scholarships.length === 0 ? (
+        ) : safeScholarships.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-slate-200 p-8 space-y-3">
             <Award className="w-12 h-12 text-slate-300 mx-auto" />
             <h3 className="text-base font-bold text-slate-800">No Matching Scholarships Found</h3>
@@ -131,7 +138,7 @@ export default function Scholarships() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {scholarships.map((sch) => {
+            {safeScholarships.map((sch) => {
               const match = sch.match_percentage || 80;
               return (
                 <div 
@@ -181,7 +188,7 @@ export default function Scholarships() {
                     </div>
 
                     {/* Positive match tags preview */}
-                    {sch.why_you_match && sch.why_you_match.length > 0 && (
+                    {Array.isArray(sch.why_you_match) && sch.why_you_match.length > 0 && (
                       <div className="text-[11px] text-emerald-800 bg-emerald-50/70 p-2 rounded border border-emerald-100 flex items-start gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                         <span className="line-clamp-1">{sch.why_you_match[0]}</span>
@@ -190,7 +197,7 @@ export default function Scholarships() {
                   </div>
 
                   <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
-                    <span className="text-[11px] text-slate-400">Rules Ver: {sch.version}</span>
+                    <span className="text-[11px] text-slate-400">Rules Ver: {sch.version || "v1.0"}</span>
                     <Link
                       to={`/scholarships/${sch.id}`}
                       className="px-4 py-1.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-600 rounded shadow-sm flex items-center gap-1.5 transition-colors"
@@ -207,5 +214,13 @@ export default function Scholarships() {
 
       </div>
     </div>
+  );
+}
+
+export default function Scholarships() {
+  return (
+    <ErrorBoundary title="Scholarship Discovery">
+      <ScholarshipsContent />
+    </ErrorBoundary>
   );
 }

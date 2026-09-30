@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
+import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { 
   FileText, 
   CheckCircle2, 
@@ -17,7 +18,7 @@ import {
   Search
 } from "lucide-react";
 
-export default function Applications() {
+function ApplicationsContent() {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedApp, setSelectedApp] = useState(null);
@@ -36,19 +37,25 @@ export default function Applications() {
   };
 
   useEffect(() => {
+    let isMounted = true;
     async function loadApplications() {
       try {
         setLoading(true);
         const data = await api.getApplications();
-        setApplications(data || []);
+        if (isMounted) {
+          setApplications(Array.isArray(data) ? data : []);
+        }
       } catch (err) {
         console.error("Error fetching applications:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     loadApplications();
+    return () => { isMounted = false; };
   }, []);
+
+  const safeApplications = Array.isArray(applications) ? applications : [];
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -80,7 +87,7 @@ export default function Applications() {
             </Link>
           </div>
 
-          {/* VISUAL 5-STAGE LIFECYCLE PROGRESS TRACKER (Section 13 & 27) */}
+          {/* VISUAL 5-STAGE LIFECYCLE PROGRESS TRACKER */}
           <div className="pt-4 border-t border-slate-100">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
               <Sparkles className="w-3.5 h-3.5 text-blue-600" />
@@ -112,7 +119,7 @@ export default function Applications() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-900">
-              Submitted Applications ({applications.length})
+              Submitted Applications ({safeApplications.length})
             </h2>
             <span className="text-xs text-slate-500">
               Direct Benefit Transfer (DBT) verification enabled
@@ -124,7 +131,7 @@ export default function Applications() {
               <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
               <span>Loading registered applications...</span>
             </div>
-          ) : applications.length === 0 ? (
+          ) : safeApplications.length === 0 ? (
             <div className="text-center py-16 text-slate-500 text-xs space-y-3">
               <Award className="w-10 h-10 text-slate-300 mx-auto" />
               <p className="font-semibold text-slate-800">No applications submitted yet.</p>
@@ -138,7 +145,7 @@ export default function Applications() {
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {applications.map((app) => {
+              {safeApplications.map((app) => {
                 const stageIdx = getStageIndex(app.current_stage);
 
                 return (
@@ -302,5 +309,13 @@ export default function Applications() {
 
       </div>
     </div>
+  );
+}
+
+export default function Applications() {
+  return (
+    <ErrorBoundary title="Application Tracking">
+      <ApplicationsContent />
+    </ErrorBoundary>
   );
 }

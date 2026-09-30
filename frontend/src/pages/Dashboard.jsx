@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../services/api";
+import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { 
   Award, 
   FileText, 
@@ -19,7 +20,7 @@ import {
   Info
 } from "lucide-react";
 
-export default function Dashboard() {
+function DashboardContent() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -32,38 +33,43 @@ export default function Dashboard() {
   const [applySuccess, setApplySuccess] = useState(null);
 
   const studentName = user?.profile?.name || user?.full_name || "Rahul Verma";
-  const completionPct = user?.profile?.completion_percentage || 85;
+  const completionPct = typeof user?.profile?.completion_percentage === "number" ? user.profile.completion_percentage : 85;
 
   useEffect(() => {
+    let isMounted = true;
     async function fetchDashboardData() {
       try {
         setLoading(true);
         const [scholarshipsData, applicationsData, documentsData] = await Promise.all([
-          api.getScholarships(),
+          api.getScholarships().catch(() => []),
           api.getApplications().catch(() => []),
           api.getDocuments().catch(() => [])
         ]);
 
-        setScholarships(scholarshipsData || []);
-        setApplications(applicationsData || []);
-        setDocuments(documentsData || []);
+        if (isMounted) {
+          setScholarships(Array.isArray(scholarshipsData) ? scholarshipsData : []);
+          setApplications(Array.isArray(applicationsData) ? applicationsData : []);
+          setDocuments(Array.isArray(documentsData) ? documentsData : []);
+        }
       } catch (err) {
         console.error("Dashboard fetch error:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     fetchDashboardData();
+    return () => { isMounted = false; };
   }, []);
 
   const handleApply = async (scholarship) => {
+    if (!scholarship || !scholarship.id) return;
     setApplyingScholarship(scholarship);
     try {
       const res = await api.createApplication(scholarship.id);
       setApplySuccess(res);
       // Refresh applications list
       const updatedApps = await api.getApplications().catch(() => []);
-      setApplications(updatedApps);
+      setApplications(Array.isArray(updatedApps) ? updatedApps : []);
     } catch (err) {
       alert(err.message || "Failed to submit application.");
     } finally {
@@ -71,11 +77,15 @@ export default function Dashboard() {
     }
   };
 
-  // Metrics for Dashboard Cards
-  const matchedCount = scholarships.filter(s => s.match_percentage >= 70).length;
-  const activeAppsCount = applications.length;
-  const pendingDocsCount = documents.filter(d => d.verification_status === "Needs Review" || d.verification_status === "Processing").length;
-  const verifiedDocsCount = documents.filter(d => d.verification_status === "Verified").length;
+  // Safe arrays for Dashboard Metrics and Lists
+  const safeScholarships = Array.isArray(scholarships) ? scholarships : [];
+  const safeApplications = Array.isArray(applications) ? applications : [];
+  const safeDocuments = Array.isArray(documents) ? documents : [];
+
+  const matchedCount = safeScholarships.filter(s => (s?.match_percentage || 0) >= 70).length;
+  const activeAppsCount = safeApplications.length;
+  const pendingDocsCount = safeDocuments.filter(d => d?.verification_status === "Needs Review" || d?.verification_status === "Processing").length;
+  const verifiedDocsCount = safeDocuments.filter(d => d?.verification_status === "Verified").length;
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
@@ -243,7 +253,7 @@ export default function Dashboard() {
 
         </section>
 
-        {/* APPLICATION SUCCESS NOTIFICATION MODAL */}
+        {/* APPLICATION SUCCESS NOTIFICATION */}
         {applySuccess && (
           <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start justify-between gap-4 text-xs text-emerald-900">
             <div className="flex items-start gap-3">
@@ -278,7 +288,7 @@ export default function Dashboard() {
               <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 <span>Recommended Scholarships</span>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                  {scholarships.length} Available
+                  {safeScholarships.length} Available
                 </span>
               </h2>
               <p className="text-xs text-slate-500">
@@ -297,9 +307,9 @@ export default function Dashboard() {
 
           {/* Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {scholarships.slice(0, 6).map((sch) => {
-              const match = sch.match_percentage || 80;
-              const isApplied = applications.some(a => a.scholarship_id === sch.id);
+            {safeScholarships.slice(0, 6).map((sch) => {
+              const match = sch?.match_percentage || 80;
+              const isApplied = safeApplications.some(a => a?.scholarship_id === sch?.id);
 
               return (
                 <div 
@@ -311,7 +321,7 @@ export default function Dashboard() {
                     {/* Header Badges */}
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                        {sch.category}
+                        {sch.category || "Higher Education"}
                       </span>
 
                       {/* Match Badge */}
@@ -341,13 +351,13 @@ export default function Dashboard() {
                     <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <span className="text-[10px] text-slate-400 block uppercase font-medium">Benefit</span>
-                        <span className="font-bold text-slate-800 text-xs line-clamp-1">{sch.amount_display}</span>
+                        <span className="font-bold text-slate-800 text-xs line-clamp-1">{sch.amount_display || "₹25,000 / year"}</span>
                       </div>
                       <div>
                         <span className="text-[10px] text-slate-400 block uppercase font-medium">Deadline</span>
                         <span className="font-semibold text-slate-800 flex items-center gap-1 text-xs">
                           <Calendar className="w-3 h-3 text-slate-400" />
-                          <span>{sch.deadline}</span>
+                          <span>{sch.deadline || "Open"}</span>
                         </span>
                       </div>
                     </div>
@@ -400,7 +410,7 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* AI ELIGIBILITY EXPLANATION MODAL / DRAWER */}
+        {/* AI ELIGIBILITY EXPLANATION MODAL */}
         {selectedWhyMatch && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-200">
@@ -430,7 +440,7 @@ export default function Dashboard() {
                   <span className="font-bold text-slate-900 text-sm">Status: {selectedWhyMatch.eligibility_status || "Potentially Eligible"}</span>
                 </div>
                 <div className="text-xl font-black text-blue-700">
-                  {selectedWhyMatch.match_percentage}%
+                  {selectedWhyMatch.match_percentage || 85}%
                 </div>
               </div>
 
@@ -441,7 +451,7 @@ export default function Dashboard() {
                   <span>Why you match</span>
                 </h4>
                 <ul className="space-y-1.5 text-xs text-slate-700">
-                  {selectedWhyMatch.why_you_match && selectedWhyMatch.why_you_match.length > 0 ? (
+                  {Array.isArray(selectedWhyMatch.why_you_match) && selectedWhyMatch.why_you_match.length > 0 ? (
                     selectedWhyMatch.why_you_match.map((item, idx) => (
                       <li key={idx} className="flex items-start gap-2 bg-emerald-50/50 p-2 rounded border border-emerald-100">
                         <span className="text-emerald-600 font-bold shrink-0">✓</span>
@@ -461,7 +471,7 @@ export default function Dashboard() {
                   <span>Missing / Uncertain Information</span>
                 </h4>
                 <ul className="space-y-1.5 text-xs text-slate-700">
-                  {selectedWhyMatch.missing_info && selectedWhyMatch.missing_info.length > 0 ? (
+                  {Array.isArray(selectedWhyMatch.missing_info) && selectedWhyMatch.missing_info.length > 0 ? (
                     selectedWhyMatch.missing_info.map((item, idx) => (
                       <li key={idx} className="flex items-start gap-2 bg-amber-50/50 p-2 rounded border border-amber-100">
                         <span className="text-amber-600 font-bold shrink-0">⚠</span>
@@ -505,5 +515,13 @@ export default function Dashboard() {
 
       </div>
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <ErrorBoundary title="Student Dashboard">
+      <DashboardContent />
+    </ErrorBoundary>
   );
 }

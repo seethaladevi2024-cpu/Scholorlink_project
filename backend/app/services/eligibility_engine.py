@@ -1,0 +1,120 @@
+import json
+from typing import Dict, Any, List, Tuple
+
+def evaluate_eligibility(
+    student_profile: Dict[str, Any],
+    rules: Dict[str, Any],
+    verified_documents: List[str] = None
+) -> Dict[str, Any]:
+    """
+    ScholarLink AI + Rule-Based Eligibility Matching Engine
+    
+    Evaluates student profile against scholarship criteria, generating:
+    - Match score percentage (0 - 100%)
+    - "Why you match" positive factors
+    - "Missing / uncertain information" pending requirements
+    - Compliance disclaimer indicating this is a preliminary match requiring verification.
+    """
+    if verified_documents is None:
+        verified_documents = []
+        
+    why_you_match: List[str] = []
+    missing_info: List[str] = []
+    
+    score_weights = {
+        "caste": 30,
+        "income": 25,
+        "academic": 25,
+        "course": 20
+    }
+    total_score = 0
+    
+    # 1. Caste / Community criteria
+    allowed_castes = rules.get("allowed_castes", ["ALL"])
+    if isinstance(allowed_castes, str):
+        try:
+            allowed_castes = json.loads(allowed_castes)
+        except Exception:
+            allowed_castes = ["ALL"]
+            
+    student_caste = (student_profile.get("caste") or "").strip().upper()
+    student_community = (student_profile.get("community") or "").strip()
+    
+    if "ALL" in [c.upper() for c in allowed_castes] or student_caste in [c.upper() for c in allowed_castes]:
+        total_score += score_weights["caste"]
+        if "ALL" in allowed_castes:
+            why_you_match.append("Open to all student communities including your registered category.")
+        else:
+            why_you_match.append(f"Community criteria matched: Eligible for {student_caste} reservation quota.")
+    else:
+        missing_info.append(f"Scholarship specifically targets {', '.join(allowed_castes)}; profile lists {student_caste or 'unspecified'}.")
+
+    # 2. Income criteria
+    max_income = float(rules.get("max_income", 250000.0))
+    student_income = float(student_profile.get("annual_income", 180000.0))
+    
+    if student_income <= max_income:
+        total_score += score_weights["income"]
+        formatted_max = f"₹{max_income:,.0f}"
+        formatted_stud = f"₹{student_income:,.0f}"
+        why_you_match.append(f"Income criteria matched: Annual family income ({formatted_stud}) is within limit ({formatted_max}).")
+    else:
+        missing_info.append(f"Annual family income exceeds maximum ceiling of ₹{max_income:,.0f}.")
+        
+    # Check if Income Certificate is uploaded & verified
+    has_income_doc = any("income" in doc.lower() for doc in verified_documents)
+    if not has_income_doc:
+        missing_info.append("Income Certificate required: Pending official revenue document upload.")
+
+    # 3. Academic Marks criteria
+    min_marks = float(rules.get("min_marks", 50.0))
+    student_marks = float(student_profile.get("marks_percentage", 84.5))
+    
+    if student_marks >= min_marks:
+        total_score += score_weights["academic"]
+        why_you_match.append(f"Academic criteria matched: Qualifying score of {student_marks:.1f}% satisfies threshold ({min_marks:.1f}%).")
+    else:
+        deficit = min_marks - student_marks
+        missing_info.append(f"Qualifying score is {deficit:.1f}% below minimum benchmark of {min_marks:.1f}%.")
+
+    # 4. Course / Stream criteria
+    allowed_courses = rules.get("allowed_courses", ["ALL"])
+    if isinstance(allowed_courses, str):
+        try:
+            allowed_courses = json.loads(allowed_courses)
+        except Exception:
+            allowed_courses = ["ALL"]
+            
+    student_course = (student_profile.get("current_course") or "").strip()
+    
+    if "ALL" in [c.upper() for c in allowed_courses]:
+        total_score += score_weights["course"]
+        why_you_match.append(f"Course criteria matched: Enrolled in eligible accredited program ({student_course or 'Higher Education'}).")
+    else:
+        # Semantic course check
+        matched_course = any(c.lower() in student_course.lower() for c in allowed_courses)
+        if matched_course:
+            total_score += score_weights["course"]
+            why_you_match.append(f"Program criteria matched: Your course matches approved disciplines ({', '.join(allowed_courses)}).")
+        else:
+            missing_info.append(f"Program verification pending: Eligible disciplines specify {', '.join(allowed_courses)}.")
+
+    # Determine status label
+    if total_score >= 80:
+        status = "Potentially Eligible"
+    elif total_score >= 50:
+        status = "Requires Verification"
+    else:
+        status = "Ineligible"
+
+    return {
+        "match_percentage": total_score,
+        "eligibility_status": status,
+        "why_you_match": why_you_match,
+        "missing_info": missing_info,
+        "is_preliminary": True,
+        "disclaimer": (
+            "Preliminary match generated by ScholarLink Intelligence Engine. "
+            "Final eligibility determination is subject to official document verification and granting authority approval."
+        )
+    }

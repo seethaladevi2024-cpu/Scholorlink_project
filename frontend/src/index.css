@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-navy: #0B192C;
+    --brand-blue: #0066CC;
+    --brand-light: #0D8BFF;
+    --bg-page: #F8FAFC;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased font-sans;
+    min-height: 100vh;
+  }
+}
+
+/* Custom scrollbars and accessible focus rings */
+*:focus-visible {
+  @apply outline-none ring-2 ring-brand-blue ring-offset-2;
+}

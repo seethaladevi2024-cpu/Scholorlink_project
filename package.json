@@ -1,0 +1,17 @@
+{
+  "name": "scholarlink-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ScholarLink — Scholarship Opportunity Intelligence Engine",
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm install && npm run build",
+    "preview": "cd frontend && npm run preview"
+  },
+  "keywords": [
+    "scholarship",
+    "education",
+    "intelligence-engine",
+    "ocr-verification"
+  ]
+}
